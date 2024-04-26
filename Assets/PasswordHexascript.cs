@@ -29,12 +29,14 @@ public class PasswordHexascript : MonoBehaviour {
         for (int i = 0; i < 19; i++)
             letters[i] = new string[6];
         string[] wlog = new string[15];
+        bool[] revW = new bool[15];
         for (int i = 0; i < 15; i++)
         {
             int line = lines[i].Length;
             string word = Wordlist.words[line - 3].PickRandom();
             wlog[i] = word;
-            if (Random.Range(0, 2) == 1)
+            revW[i] = Random.Range(0, 2) == 1;
+            if (revW[i])
                 word = new string(word.Reverse().ToArray());
             for (int j = 0; j < line; j++)
             {
@@ -43,7 +45,7 @@ public class PasswordHexascript : MonoBehaviour {
             }
         }
         for (int i = 0; i < 3; i++)
-            Debug.LogFormat("[Password Hexaterminals #{0}] Write the words: {1} & {2} along the {3}-axis.", moduleID, string.Join(", ", Enumerable.Range(i * 5, 4).Select(x => wlog[x]).ToArray()), wlog[(i * 5) + 4], "SRQ"[i]);
+            Debug.LogFormat("[Password Hexaterminals #{0}] Write the words: {1} & {2} along the {3}-axis.", moduleID, string.Join(", ", Enumerable.Range(i * 5, 4).Select(x => string.Format("{0}({1})", wlog[x], revW[x] ^ i > 0 ? "<-" : "->")).ToArray()), string.Format("{0}({1})",wlog[(i * 5) + 4],revW[i * 5 + 4] ^ i > 0 ? "<-" : "->"), "SRQ"[i]);
         int[] g = new int[19];
         do
         {
@@ -60,9 +62,9 @@ public class PasswordHexascript : MonoBehaviour {
         expectedSpinCount = g.ToArray();
         Debug.LogFormat("[Password Hexaterminals #{0}] Spin the terminals these many times in reading order to achieve the words mentioned: {1}.", moduleID, string.Join(", ", g.Select(x => x.ToString()).ToArray()));
         var axisTerminalRefs = new int[][][] {
-            new int[][] { new[] { 0, 3, 7 }, new[] { 1, 4, 8, 12 }, new[] { 2, 5, 9, 13, 16 }, new[] { 6, 10, 14, 17 }, new[] { 11, 15, 18 } },
-            new int[][] { new[] { 0, 1, 2 }, new[] { 3, 4, 5, 6 }, new[] { 7, 8, 9, 10, 11 }, new[] { 12, 13, 14, 15 }, new[] { 16, 17, 18 } },
-            new int[][] { new[] { 2, 6, 11 }, new[] { 1, 5, 10, 15 }, new[] { 0, 4, 9, 14, 18 }, new[] { 3, 8, 13, 17 }, new[] { 7, 12, 16 } },
+            new int[][] { new[] { 0, 3, 7 }, new[] { 1, 4, 8, 12 }, new[] { 2, 5, 9, 13, 16 }, new[] { 6, 10, 14, 17 }, new[] { 11, 15, 18 } }, // S
+            new int[][] { new[] { 0, 1, 2 }, new[] { 3, 4, 5, 6 }, new[] { 7, 8, 9, 10, 11 }, new[] { 12, 13, 14, 15 }, new[] { 16, 17, 18 } }, // R
+            new int[][] { new[] { 2, 6, 11 }, new[] { 1, 5, 10, 15 }, new[] { 0, 4, 9, 14, 18 }, new[] { 3, 8, 13, 17 }, new[] { 7, 12, 16 } }, // Q
         };
         for (int i = 0; i < 3; i++)
             Debug.LogFormat("[Password Hexaterminals #{0}] Initial letters across the terminals in the {1}-axis: [{2}]", moduleID, "SRQ"[i], axisTerminalRefs[i].Select(a => a.Select(b => Enumerable.Range(0, 2).Select(c => letters[b][3 * c + i]).Join("")).Join("-")).Join("];["));
@@ -187,13 +189,14 @@ public class PasswordHexascript : MonoBehaviour {
                 Check(i);
         spin = false;
     }
-    readonly string TwitchHelpMessage = "\"!{0} A2 5 B3\" [Rotates the peg at A2 5 times, and B3 once. Rows are numbered 1-5 from top to bottom, columns are labeled A-E from left to right, from the given row. Multiples can be chained with spaces.] | \"!{0} reset\" [Spins ALL terminals back to their initial states, or a series of terminals back to their initial states.]";
+    readonly string TwitchHelpMessage = "\"!{0} A2 5 B3\" [Rotates the peg at A2 5 times, and B3 once. Rows are numbered 1-5 from top to bottom, columns are labeled A-E from left to right, from the given row. Multiples can be chained with spaces.] | \"!{0} reset\" [Spins ALL terminals back to their initial states, or a series of terminals back to their initial states.] | \"!{0} cycle\" [Spins ALL terminals slowly 6 times, or a series of terminals slowly 6 times.]";
 
     IEnumerator ProcessTwitchCommand(string cmd)
     {
         var intCmd = cmd.Trim();
         var rgxValidCoordinate = Regex.Match(intCmd, @"^(\s?[A-E][1-5](\s\d+)?)+$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         var rgxReset = Regex.Match(intCmd, @"^reset(\s[A-E][1-5])*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var rgxCycle = Regex.Match(intCmd, @"^cycle(\s[A-E][1-5])*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         var matchIdxesGroup = new int[][] {
                 new[] { 0, 1, 2 },
                 new[] { 3, 4, 5, 6 },
@@ -239,6 +242,43 @@ public class PasswordHexascript : MonoBehaviour {
                     while (spin)
                         yield return string.Format("trycancel Spinning the terminals back to their initial positions has been canceled!");
                 }
+            }
+        }
+        else if (rgxCycle.Success)
+        {
+            var matchingValueCycleSplit = rgxCycle.Value.Split().Skip(1);
+            var idxesToCycle = new List<int>();
+            if (matchingValueCycleSplit.Any())
+            {
+                foreach (var matchedVal in matchingValueCycleSplit)
+                {
+                    if (Regex.IsMatch(matchedVal, @"^[A-E][1-5]$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                    {
+                        var idxLetter = "ABCDE".IndexOf(matchedVal.ToUpperInvariant().First());
+                        var idxNumeral = "12345".IndexOf(matchedVal.ToUpperInvariant().Last());
+                        if (matchIdxesGroup[idxNumeral].Length <= idxLetter)
+                        {
+                            yield return string.Format("sendtochaterror There is no terminal in \"{0}.\"", matchedVal);
+                            yield break;
+                        }
+                        idxesToCycle.Add(matchIdxesGroup[idxNumeral][idxLetter]);
+                    }
+                }
+            }
+            else
+                idxesToCycle.AddRange(Enumerable.Range(0, 19));
+            yield return null;
+            foreach (int idx in idxesToCycle)
+            {
+                var lastSpinCnt = spins[idx];
+                do
+                {
+                    spinners[idx].OnInteract();
+                    yield return string.Format("trywaitcancel 3.0 Cycling the terminals has been canceled!");
+                    while (spin)
+                        yield return string.Format("trycancel Cycling the terminals has been canceled!");
+                }
+                while (spins[idx] != lastSpinCnt);
             }
         }
         else if (rgxValidCoordinate.Success)
