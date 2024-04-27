@@ -274,9 +274,9 @@ public class PasswordHexascript : MonoBehaviour {
                 do
                 {
                     spinners[idx].OnInteract();
-                    yield return string.Format("trywaitcancel 3.0 Cycling the terminals has been canceled!");
                     while (spin)
                         yield return string.Format("trycancel Cycling the terminals has been canceled!");
+                    yield return string.Format("trywaitcancel 3.0 Cycling the terminals has been canceled!");
                 }
                 while (spins[idx] != lastSpinCnt);
             }
